@@ -279,6 +279,260 @@ export const renderHTMLDev = async ({
     { concurrency: 2 }
   )
 }
+<<<<<<< HEAD
+
+export async function renderPartialHydrationProd({
+  paths,
+  envVars,
+  sessionId,
+  pathPrefix,
+}: {
+  paths: Array<string>
+  envVars: Array<[string, string | undefined]>
+  sessionId: number
+  pathPrefix
+}): Promise<void> {
+  const publicDir = join(process.cwd(), `public`)
+
+  const unsafeBuiltinsUsageByPagePath = {}
+
+  // Check if we need to do setup and cache clearing. Within same session we can reuse memoized data,
+  // but it's not safe to reuse them in different sessions. Check description of `lastSessionId` for more details
+  if (sessionId !== lastSessionId) {
+    clearCaches()
+
+    // This is being executed in child process, so we need to set some vars
+    // for modules that aren't bundled by webpack.
+    envVars.forEach(([key, value]) => (process.env[key] = value))
+
+    webpackStats = await readWebpackStats(publicDir)
+
+    lastSessionId = sessionId
+
+    if (global.unsafeBuiltinUsage && global.unsafeBuiltinUsage.length > 0) {
+      unsafeBuiltinsUsageByPagePath[`__import_time__`] =
+        global.unsafeBuiltinUsage
+    }
+  }
+
+  for (const pagePath of paths) {
+    const pageData = await readPageData(publicDir, pagePath)
+    const { staticQueryContext } = await getStaticQueryContext(
+      pageData.staticQueryHashes
+    )
+
+    const pageRenderer = path.join(
+      process.cwd(),
+      `.cache`,
+      `partial-hydration`,
+      `render-page`
+    )
+
+    const {
+      getPageChunk,
+      StaticQueryServerContext,
+      renderToPipeableStream,
+      React,
+    } = require(pageRenderer)
+    const chunk = await getPageChunk({
+      componentChunkName: pageData.componentChunkName,
+    })
+    const outputPath = generatePageDataPath(
+      path.join(process.cwd(), `public`),
+      pagePath
+    ).replace(`.json`, `-rsc.json`)
+
+    const stream = fs.createWriteStream(outputPath)
+
+    const prefixedPagePath = pathPrefix
+      ? `${pathPrefix}${pageData.path}`
+      : pageData.path
+    const [pathname, search = ``] = prefixedPagePath.split(`?`)
+
+    const { pipe } = renderToPipeableStream(
+      React.createElement(
+        StaticQueryServerContext.Provider,
+        { value: staticQueryContext },
+        [
+          // Make `useLocation` hook usuable in children
+          React.createElement(
+            ServerLocation,
+            { key: `partial-hydration-server-location`, url: pageData.path },
+            [
+              React.createElement(chunk.default, {
+                key: `partial-hydration-page`,
+                data: pageData.result.data,
+                pageContext: pageData.result.pageContext,
+                // Make location available to page as props, logic extracted from `LocationProvider`
+                location: {
+                  pathname,
+                  search,
+                  hash: ``,
+                },
+              }),
+            ]
+          ),
+        ]
+      ),
+      JSON.parse(
+        fs.readFileSync(
+          path.join(
+            process.cwd(),
+            `.cache`,
+            `partial-hydration`,
+            `manifest.json`
+          ),
+          `utf8`
+        )
+      ),
+      {
+        // React spits out the error here and does not emit it, we want to emit it
+        // so we can reject with the error and handle it upstream
+        onError: error => {
+          const partialHydrationError: IRenderHTMLError = error
+
+          partialHydrationError.context = {
+            path: pagePath,
+            unsafeBuiltinsUsageByPagePath,
+          }
+
+          stream.emit(`error`, error)
+        },
+      }
+    )
+
+    await new Promise<void>((resolve, reject) => {
+      stream.on(`error`, (error: IRenderHTMLError) => {
+        reject(error)
+      })
+
+      stream.on(`close`, () => {
+        resolve()
+      })
+
+      pipe(stream)
+    })
+  }
+}
+||||||| 545f2081c6
+=======
+
+export async function renderPartialHydrationProd({
+  paths,
+  envVars,
+  sessionId,
+}: {
+  paths: Array<string>
+  envVars: Array<[string, string | undefined]>
+  sessionId: number
+}): Promise<void> {
+  const publicDir = join(process.cwd(), `public`)
+
+  const unsafeBuiltinsUsageByPagePath = {}
+
+  // Check if we need to do setup and cache clearing. Within same session we can reuse memoized data,
+  // but it's not safe to reuse them in different sessions. Check description of `lastSessionId` for more details
+  if (sessionId !== lastSessionId) {
+    clearCaches()
+
+    // This is being executed in child process, so we need to set some vars
+    // for modules that aren't bundled by webpack.
+    envVars.forEach(([key, value]) => (process.env[key] = value))
+
+    webpackStats = await readWebpackStats(publicDir)
+
+    lastSessionId = sessionId
+
+    if (global.unsafeBuiltinUsage && global.unsafeBuiltinUsage.length > 0) {
+      unsafeBuiltinsUsageByPagePath[`__import_time__`] =
+        global.unsafeBuiltinUsage
+    }
+  }
+
+  for (const pagePath of paths) {
+    const pageData = await readPageData(publicDir, pagePath)
+    const { staticQueryContext } = await getStaticQueryContext(
+      pageData.staticQueryHashes
+    )
+
+    const pageRenderer = path.join(
+      process.cwd(),
+      `.cache`,
+      `partial-hydration`,
+      `render-page`
+    )
+
+    const {
+      getPageChunk,
+      StaticQueryServerContext,
+      renderToPipeableStream,
+      React,
+    } = require(pageRenderer)
+    const chunk = await getPageChunk({
+      componentChunkName: pageData.componentChunkName,
+    })
+    const outputPath = generatePageDataPath(
+      path.join(process.cwd(), `public`),
+      pagePath
+    ).replace(`.json`, `-rsc.json`)
+
+    const stream = fs.createWriteStream(outputPath)
+
+    const { pipe } = renderToPipeableStream(
+      React.createElement(
+        StaticQueryServerContext.Provider,
+        { value: staticQueryContext },
+        [
+          React.createElement(chunk.default, {
+            data: pageData.result.data,
+            pageContext: pageData.result.pageContext,
+            location: {
+              pathname: pageData.path,
+            },
+          }),
+        ]
+      ),
+      JSON.parse(
+        fs.readFileSync(
+          path.join(
+            process.cwd(),
+            `.cache`,
+            `partial-hydration`,
+            `manifest.json`
+          ),
+          `utf8`
+        )
+      ),
+      {
+        // React spits out the error here and does not emit it, we want to emit it
+        // so we can reject with the error and handle it upstream
+        onError: error => {
+          const partialHydrationError: IRenderHTMLError = error
+
+          partialHydrationError.context = {
+            path: pagePath,
+            unsafeBuiltinsUsageByPagePath,
+          }
+
+          stream.emit(`error`, error)
+        },
+      }
+    )
+
+    await new Promise<void>((resolve, reject) => {
+      stream.on(`error`, (error: IRenderHTMLError) => {
+        reject(error)
+      })
+
+      stream.on(`close`, () => {
+        resolve()
+      })
+
+      pipe(stream)
+    })
+  }
+}
+>>>>>>> feat/partial-hydration-webpack
 
 export async function renderPartialHydrationProd({
   paths,
