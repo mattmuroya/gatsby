@@ -5,9 +5,21 @@ import loader from "./loader"
 const prefetchPathname = loader.enqueue
 
 const StaticQueryContext = React.createContext({})
-let StaticQueryServerContext = null
+let _StaticQueryServerContext = null
+
 if (React.createServerContext) {
-  StaticQueryServerContext = React.createServerContext(`StaticQuery`, {})
+  _StaticQueryServerContext = React.createServerContext(`StaticQuery`, {})
+}
+
+function getClientOrServerContext() {
+  if (
+    _StaticQueryServerContext &&
+    Object.keys(_StaticQueryServerContext._currentValue).length
+  ) {
+    return _StaticQueryServerContext
+  } else {
+    return StaticQueryContext
+  }
 }
 
 function StaticQueryDataRenderer({ staticQueryData, data, query, render }) {
@@ -50,18 +62,9 @@ const useStaticQuery = query => {
         `Please update React and ReactDOM to 16.8.0 or later to use the useStaticQuery hook.`
     )
   }
-  let context
 
-  // Can we get a better check here?
-  if (
-    StaticQueryServerContext &&
-    Object.keys(StaticQueryServerContext._currentValue).length
-  ) {
-    context = React.useContext(StaticQueryServerContext)
-  } else {
-    context = React.useContext(StaticQueryContext)
-  }
-
+  const contextToUse = getClientOrServerContext()
+  const context = React.useContext(contextToUse)
   // query is a stringified number like `3303882` when wrapped with graphql, If a user forgets
   // to wrap the query in a grqphql, then casting it to a Number results in `NaN` allowing us to
   // catch the misuse of the API and give proper direction
@@ -100,6 +103,7 @@ function graphql() {
       `Unless your site has a complex or custom babel/Gatsby configuration this is likely a bug in Gatsby.`
   )
 }
+const StaticQueryServerContext = _StaticQueryServerContext || StaticQueryContext
 
 export { default as PageRenderer } from "./public-page-renderer"
 export { useScrollRestoration } from "gatsby-react-router-scroll"
